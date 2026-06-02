@@ -22,7 +22,7 @@
 \vspace{-0.5in}
 
 \section*{Introduction}
-I play badminton and practice bouldering, and I have been injured in both: shoulder strain from poor badminton smash mechanics, and knee misalignment plus shoulder overreach during dynamic bouldering moves. These injuries motivate this project because many sport injuries are linked to measurable, preventable joint-angle deviations. My goal is to build a real-time webcam system that classifies body poses into injury-risk categories without motion-capture equipment. Deep learning is appropriate because fixed angle rules do not generalize well across body sizes, camera views, and noisy keypoint predictions; an MLP can learn the injury-risk boundary from data. The same tool could support amateur athletes and lightweight human-robot interaction safety monitoring. Problem statement: given one webcam frame, classify the observed human pose into one of four clinically grounded injury-risk classes.
+The project is motivated by the student's experience with badminton and bouldering injuries, including shoulder strain from poor badminton smash mechanics and knee misalignment plus shoulder overreach during dynamic bouldering moves. These examples show how many sport injuries are linked to measurable, preventable joint-angle deviations. The goal is to build a real-time webcam system that classifies body poses into injury-risk categories without motion-capture equipment. Deep learning is appropriate because fixed angle rules do not generalize well across body sizes, camera views, and noisy keypoint predictions; an MLP can learn the injury-risk boundary from data. The same tool could support amateur athletes and lightweight human-robot interaction safety monitoring. Problem statement: given one webcam frame, classify the observed human pose into one of four clinically grounded injury-risk classes.
 
 \section*{Illustration}
 \begin{figure}[!h]
@@ -82,7 +82,13 @@ MPOSE2021 contains pose data derived from human videos, so I must confirm that i
 
 
 \newpage
+\section*{References}
 \begin{thebibliography}{9}
+
+\bibitem[Anthropic(n.d.)]{anthropic2026claude}
+Anthropic. (n.d.).
+\newblock Claude.ai.
+\newblock \url{https://claude.ai}. Accessed June 2, 2026.
 
 \bibitem[Bazarevsky et~al.(2020)]{bazarevsky2020blazepose}
 Bazarevsky, V., Grishchenko, I., Raveendran, K., Zhu, T., Zhang, F., and Grundmann, M. (2020).
@@ -98,6 +104,11 @@ Fan, C., Mei, Q., and Li, X. (2024).
 Hignett, S. and McAtamney, L. (2000).
 \newblock Rapid entire body assessment (REBA).
 \newblock \textit{Applied Ergonomics}, 31(2), 201--205.
+
+\bibitem[OpenAI(n.d.)]{openai2026codex}
+OpenAI. (n.d.).
+\newblock Codex.
+\newblock \url{https://openai.com/codex}. Accessed June 2, 2026.
 
 \bibitem[Mazzia et~al.(2021)]{mazzia2021action}
 Mazzia, V., Angarano, S., Salvetti, F., Angelini, F., and Chiaberge, M. (2021).
