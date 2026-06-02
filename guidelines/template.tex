@@ -1,83 +1,87 @@
 \documentclass[final]{article}
 
-
 \usepackage{aps360}
-\usepackage[utf8]{inputenc} % allow utf-8 input
-\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
-\usepackage{hyperref}       % hyperlinks
-\usepackage{url}            % simple URL typesetting
-\usepackage{booktabs}       % professional-quality tables
-\usepackage{amsmath}        % math notation
-\usepackage{amsfonts}       % blackboard math symbols
-\usepackage{nicefrac}       % compact symbols for 1/2, etc.
-\usepackage{microtype}      % microtypography
-\usepackage{xcolor}         % colors
- 
-\title{Human Pose Estimation for Ergonomic Risk Scoring}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{microtype}
 
-\author{%
-  First \& Last Name \\
-  Student Number, email\\
-  Link to Google Colab or GitHub: TBD\\
-}
+\title{Sport-Informed Injury Risk Classification via Real-Time Pose Estimation}
+\author{[YOUR NAME] \\
+[STUDENT NUMBER] \\
+APS360: Applied Fundamentals of Deep Learning}
+\date{}
 
 \begin{document}
 
 \maketitle
-
 \vspace{-0.5in}
 
 \section*{Introduction}
-This project will build a real-time ergonomic risk classifier from webcam video. The motivating use case is human-robot collaboration: before a robot moves near a person, it should recognize risky postures such as trunk bending, neck strain, or overreaching. The final demo will overlay a skeleton, risk label, and confidence score on live video.
-
-The task is four-class classification: \textit{neutral}, \textit{trunk\_flexion}, \textit{neck\_strain}, and \textit{overreach}. A pretrained pose estimator, such as MoveNet or MediaPipe Pose, will convert each frame into body keypoints. My trainable model will be a PyTorch multilayer perceptron (MLP) that maps normalized keypoints to four logits. Deep learning is useful because posture labels depend on several noisy joints, body sizes, and camera viewpoints. Success will be measured with accuracy, macro-F1, per-class precision/recall, a confusion matrix, and live inference speed.
+I play badminton and practice bouldering, and I have been injured in both: shoulder strain from poor badminton smash mechanics, and knee misalignment plus shoulder overreach during dynamic bouldering moves. These injuries motivate this project because many sport injuries are linked to measurable, preventable joint-angle deviations. My goal is to build a real-time webcam system that classifies body poses into injury-risk categories without motion-capture equipment. Deep learning is appropriate because fixed angle rules do not generalize well across body sizes, camera views, and noisy keypoint predictions; an MLP can learn the injury-risk boundary from data. The same tool could support amateur athletes and lightweight human-robot interaction safety monitoring. Problem statement: given one webcam frame, classify the observed human pose into one of four clinically grounded injury-risk classes.
 
 \section*{Illustration}
 \begin{figure}[!h]
-  \centering
-  \fbox{
-  \begin{minipage}{0.92\linewidth}
-  \centering
-  \textbf{Webcam frame} $\rightarrow$
-  \textbf{Pose estimator} $\rightarrow$
-  \textbf{17 keypoints} $(x,y,c)$ $\rightarrow$
-  \textbf{normalization} $\rightarrow$
-  \textbf{MLP classifier} $\rightarrow$
-  \textbf{risk label + overlay}
-  \end{minipage}
-  }
-  \caption{The pretrained pose model extracts the skeleton; the trainable MLP predicts the ergonomic risk class.}
-  \label{fig:pipeline}
+\centering
+\fbox{\begin{minipage}{0.93\linewidth}
+\centering\small
+\textbf{Webcam frame} $\rightarrow$
+\textbf{MoveNet, pretrained and frozen} $\rightarrow$
+\textbf{51-dim vector: 17 joints $\times$ $(x,y,c)$} $\rightarrow$
+\textbf{My MLP: Linear(51,128), ReLU, Dropout; Linear(128,64), ReLU, Dropout; Linear(64,4), Softmax} $\rightarrow$
+\textbf{0 Neutral; 1 Trunk $>60^\circ$; 2 Neck $>20^\circ$; 3 Upper arm $>90^\circ$} $\rightarrow$
+\textbf{Live skeleton and risk-label overlay}
+\end{minipage}}
+\caption{Two-stage pipeline. Stage 1 is a frozen pose feature extractor. Stage 2 is my trained classifier, supervised by REBA-based labels.}
+\label{fig:pipeline}
 \end{figure}
 
 \section*{Background \& Related Work}
+\textbf{REBA.} \citet{hignett2000reba} introduced a clinical postural scoring tool built from more than 600 postural examples. This project uses its trunk, neck, and upper-limb thresholds to generate biomechanically grounded labels instead of manual labels.
+
+\textbf{BlazePose.} \citet{bazarevsky2020blazepose} showed that lightweight CNN pose estimation can run in real time on-device. This supports the choice of a frozen MoveNet-style backbone for fast webcam inference.
+
+\textbf{HRNet.} \citet{sun2019hrnet} maintains high-resolution feature maps for accurate keypoint localization. My project trades some pose-estimation accuracy for CPU speed by using a lighter frozen pose model.
+
+\textbf{Deep REBA.} \citet{chatzis2022automatic} estimated REBA scores from RGB-derived 3D skeletons using a variational deep network. My project keeps the skeleton-plus-REBA idea but solves a simpler 2D, four-class webcam problem.
+
+\textbf{ConstructionPose3D.} \citet{fan2024cp3d} introduced a large construction-pose dataset for deep ergonomic assessment. My project extends pose-based risk classification to sports using consumer webcam data and no depth sensor. The gap is lightweight, real-time, sport-context injury-risk classification from monocular 2D pose with clinical labels.
 
 \section*{Data Processing}
-The primary dataset will be MPOSE2021, a pose-based human action dataset with single-person keypoint sequences \citep{mazzia2021action,pic4ser2021mpose}. It is suitable because it provides skeleton data directly, letting the project focus on ergonomic classification rather than training a pose detector. I will map its keypoint order to the MoveNet/MediaPipe order used at webcam inference time.
+I will use MPOSE2021 \citep{mazzia2021action,mpose2021zenodo}, available from GitHub and Zenodo \citep{pic4ser2021mpose}. It has 15,429 samples, 20 action classes, and 100 subjects. The full array has shape \texttt{(N,30,17,3)}: samples, frames, keypoints, and $(x,y,confidence)$ values pre-extracted by OpenPose/PoseNet. No raw images are used; the MLP trains directly on keypoint vectors normalized to match MoveNet output.
 
-MPOSE2021 has action labels, so I will repurpose it by generating ergonomic labels from joint geometry. For each pose, I will compute angles from three keypoints:
-\[
-\theta = \cos^{-1}\left(\frac{(A-B)\cdot(C-B)}{\|A-B\|\|C-B\|}\right),
-\]
-where $B$ is the measured joint. Simplified RULA/REBA thresholds \citep{mcatamney1993rula,hignett2000reba} will assign the four labels. If multiple risks occur, the largest threshold violation will decide the class.
+First, I will reduce each 30-frame sequence to one representative pose by temporal averaging: \texttt{X\_avg = X.mean(axis=1)}, giving shape \texttt{(N,17,3)}, then flatten to \texttt{(N,51)}. Second, I will remove high-motion actions that cannot be assigned quasi-static ergonomic labels. The motion score is the mean frame-to-frame keypoint displacement, $\frac{1}{TJ}\sum_t\sum_j \|\mathbf{p}_{t+1,j}-\mathbf{p}_{t,j}\|_1$, and only low-motion samples will be retained. Third, I will discard all original action labels and generate labels from joint angles using $\theta=\arccos((\vec{BA}\cdot\vec{BC})/(\|\vec{BA}\|\|\vec{BC}\|))$.
 
-I will remove samples with missing landmarks, filter low-confidence keypoints, center each skeleton at the mid-hip, and scale by torso length or shoulder width. Each frame will use $17 \times 3 = 51$ input values. Data will be split into train/validation/test sets by sequence or subject where possible. I will also record a small manually labelled webcam test set for the four classes.
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+Class & Label & Rule \\
+\midrule
+0 & Neutral & no major violation \\
+1 & Trunk flexion & trunk $>60^\circ$ \\
+2 & Neck strain & neck $>20^\circ$ \\
+3 & Overreach & upper arm $>90^\circ$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Worst violation wins if several rules fire. I will filter missing/low-confidence keypoints, center each skeleton at the hip, scale by torso length, and use inverse-frequency class weights to address class imbalance. Evaluation will use an 80/20 train/validation split and a small manually labelled webcam test set.
 
 \section*{Architecture}
-The model is a small PyTorch MLP trained on 51-dimensional keypoint vectors:
-
-\[
-\text{Input}(51) \rightarrow \text{Linear}(128) \rightarrow \text{ReLU} \rightarrow
-\text{Dropout} \rightarrow \text{Linear}(64) \rightarrow \text{ReLU} \rightarrow
-\text{Linear}(4).
-\]
-
-The final layer outputs four class logits. I will train with cross-entropy loss and Adam, then tune learning rate, dropout, hidden size, and class weighting on the validation set. In the demo, OpenCV will draw the skeleton and predicted class on each webcam frame.
+Stage 1 is MoveNet \citep{tensorflowmovenet}, pretrained and frozen. It takes a $192\times192\times3$ RGB frame and outputs a 51-dimensional keypoint vector; its weights are not updated. Stage 2 is my PyTorch MLP: \texttt{Linear(51,128)} $\rightarrow$ ReLU $\rightarrow$ Dropout(0.3) $\rightarrow$ \texttt{Linear(128,64)} $\rightarrow$ ReLU $\rightarrow$ Dropout(0.3) $\rightarrow$ \texttt{Linear(64,4)}. The output is a four-class probability distribution after softmax. I will train with weighted cross-entropy loss, Adam with learning rate 0.001, 50 epochs, early stopping with patience 10, and validation-based tuning. An MLP fits this problem because the input is a structured numerical vector, not an image grid; a CNN would impose unnecessary spatial assumptions.
 
 \section*{Baseline Model}
-The baseline will be a rule-based classifier using the same normalized keypoints. It will compute neck, trunk, and upper-arm angles, then apply simplified RULA/REBA thresholds directly. If no threshold is violated, it predicts \textit{neutral}; otherwise it predicts the most severe violated class. This baseline is interpretable but sensitive to noisy keypoints. The MLP should improve robustness by learning joint patterns from data.
+The baseline is a deterministic REBA-rule classifier with no learned parameters. It computes the same neck, trunk, upper-arm, and knee angles, applies the threshold table, and outputs the highest-risk class. This is a strong baseline because the training labels come from these rules. The MLP should only be considered useful if it improves accuracy and macro-F1 on held-out data by handling noisy keypoints, body-size variation, and camera-angle variation better than hard thresholds.
 
 \section*{Ethical Considerations}
+MPOSE2021 contains pose data derived from human videos, so I must confirm that its terms permit academic use. Although raw images are not used, the source datasets may not represent all body types, ages, or ethnicities, so errors may be uneven across users. False negatives could make an athlete overtrust the system; it should be framed as a training aid, not medical advice or a safety guarantee. Any gym, sport, or workplace deployment must obtain informed consent because live pose tracking can become surveillance.
+
+\section*{Code Link}
+% TODO: Replace with actual public GitHub or Colab link before submission.
+All code for this project is available at: \url{https://github.com/[YOUR-GITHUB-USERNAME]/ergoposture-aps360}
 
 \newpage
 \section*{References}
@@ -87,6 +91,11 @@ The baseline will be a rule-based classifier using the same normalized keypoints
 Bazarevsky, V., Grishchenko, I., Raveendran, K., Zhu, T., Zhang, F., and Grundmann, M. (2020).
 \newblock BlazePose: On-device real-time body pose tracking.
 \newblock \textit{arXiv preprint arXiv:2006.10204}.
+
+\bibitem[Fan et~al.(2024)]{fan2024cp3d}
+Fan, C., Mei, Q., and Li, X. (2024).
+\newblock 3D pose estimation dataset and deep learning-based ergonomic risk assessment in construction.
+\newblock \textit{Automation in Construction}, 164, 105452.
 
 \bibitem[Hignett and McAtamney(2000)]{hignett2000reba}
 Hignett, S. and McAtamney, L. (2000).
@@ -98,22 +107,31 @@ Mazzia, V., Angarano, S., Salvetti, F., Angelini, F., and Chiaberge, M. (2021).
 \newblock Action Transformer: A self-attention model for short-time pose-based human action recognition.
 \newblock \textit{Pattern Recognition}, 124, 108487.
 
-\bibitem[McAtamney and Corlett(1993)]{mcatamney1993rula}
-McAtamney, L. and Corlett, E. N. (1993).
-\newblock RULA: A survey method for the investigation of work-related upper limb disorders.
-\newblock \textit{Applied Ergonomics}, 24(2), 91--99.
+\bibitem[Mazzia et~al.(2021)]{mpose2021zenodo}
+Mazzia, V., Angarano, S., Salvetti, F., Angelini, F., and Chiaberge, M. (2021).
+\newblock MPOSE2021: A dataset for short-time pose-based human action recognition.
+\newblock Zenodo. \url{https://zenodo.org/records/5803076}.
 
 \bibitem[PIC4SeR(2021)]{pic4ser2021mpose}
 PIC4SeR. (2021).
-\newblock MPOSE2021\_Dataset: A dataset for short-time human action recognition.
+\newblock MPOSE2021\_Dataset.
 \newblock \url{https://github.com/PIC4SeR/MPOSE2021_Dataset}.
+
+\bibitem[Sun et~al.(2019)]{sun2019hrnet}
+Sun, K., Xiao, B., Liu, D., and Wang, J. (2019).
+\newblock Deep high-resolution representation learning for human pose estimation.
+\newblock \textit{CVPR}, 5693--5703.
 
 \bibitem[TensorFlow Hub(2024)]{tensorflowmovenet}
 TensorFlow Hub. (2024).
 \newblock MoveNet: Ultra fast and accurate pose detection model.
 \newblock \url{https://www.tensorflow.org/hub/tutorials/movenet}.
 
-\end{thebibliography}
+\bibitem[Chatzis et~al.(2022)]{chatzis2022automatic}
+Chatzis, T., Konstantinidis, D., and Dimitropoulos, K. (2022).
+\newblock Automatic ergonomic risk assessment using a variational deep network architecture.
+\newblock \textit{Sensors}, 22(16), 6051.
 
+\end{thebibliography}
 
 \end{document}
