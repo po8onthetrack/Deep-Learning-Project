@@ -11,6 +11,28 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, calc}
 
+% Reduce space between section headers and body text
+\makeatletter
+\renewcommand{\section}{%
+  \@startsection{section}{1}{\z@}%
+                {-1.5ex \@plus -0.3ex \@minus -0.2ex}%
+                {0.4ex \@plus 0.1ex}%
+                {\large\bf\raggedright}%
+}
+\makeatother
+
+% Override geometry: tighter top/bottom margins
+\AtBeginDocument{%
+  \newgeometry{%
+    textheight=9.5in,
+    textwidth=5.5in,
+    top=0.65in,
+    headheight=12pt,
+    headsep=15pt,
+    footskip=18pt%
+  }%
+}
+
 \title{Sport-Informed Injury Risk Classification via Pose Estimation}
 \author{%
   Harry Zhang\\
@@ -21,10 +43,10 @@
 \begin{document}
 
 \maketitle
-\vspace{-0.5in}
+\vspace{-0.45in}
 
 \section*{Introduction}
-The project is motivated by the student's experience with badminton and bouldering injuries, including shoulder strain from poor smash mechanics and wrist sprain during dynamic bouldering moves. These examples show how many sport injuries are linked to measurable, preventable joint-angle deviations. The goal is to build a system that classifies a 51-dimensional keypoint vector extracted from one image frame into one of four clinically grounded injury-risk categories, without motion-capture equipment. Deep learning is appropriate because fixed angle thresholds do not generalize across body sizes, camera viewpoints, or noisy keypoint estimates --- an MLP can learn a robust decision boundary from data where hard rules fail.
+The project is motivated by the author's experience with badminton and bouldering injuries, including shoulder strain from poor smash mechanics and wrist sprain during dynamic bouldering moves. These examples show how many sport injuries are linked to measurable, preventable joint-angle deviations. The goal is to build a system that classifies a 51-dimensional keypoint vector extracted from one image frame into one of four clinically grounded injury-risk categories, without motion-capture equipment. Deep learning is appropriate because fixed angle thresholds do not generalize across body sizes, camera viewpoints, or noisy keypoint estimates --- an MLP can learn a robust decision boundary from data where hard rules fail.
 
 \section*{Illustration}
 \begin{figure}[!h]
@@ -75,11 +97,11 @@ The project is motivated by the student's experience with badminton and boulderi
 
 \textbf{BlazePose.} \citet{bazarevsky2020blazepose} showed that lightweight CNN pose estimation can run in real time on-device. This supports the choice of a frozen MoveNet-style backbone for fast keypoint extraction.
 
-\textbf{HRNet.} \citet{sun2019hrnet} maintains high-resolution feature maps for accurate keypoint localization. My project trades some pose-estimation accuracy for speed by using a lighter frozen pose model.
+\textbf{HRNet.} \citet{sun2019hrnet} maintains high-resolution feature maps for accurate keypoint localization. This project trades some pose-estimation accuracy for speed by using a lighter frozen pose model.
 
-\textbf{Deep REBA.} \citet{chatzis2022automatic} estimated REBA scores from RGB-derived 3D skeletons using a variational deep network. My project keeps the skeleton-plus-REBA idea but solves a simpler 2D, four-class problem.
+\textbf{Deep REBA.} \citet{chatzis2022automatic} estimated REBA scores from RGB-derived 3D skeletons using a variational deep network. This project keeps the skeleton-plus-REBA idea but solves a simpler 2D, four-class problem.
 
-\textbf{ConstructionPose3D.} \citet{fan2024cp3d} introduced a large construction-pose dataset for deep ergonomic assessment. My project extends pose-based risk classification to sports using consumer-camera data and no depth sensor. The gap is lightweight, sport-context injury-risk classification from monocular 2D pose with clinical labels.
+\textbf{ConstructionPose3D.} \citet{fan2024cp3d} introduced a large construction-pose dataset for deep ergonomic assessment. This project extends pose-based risk classification to sports using consumer-camera data and no depth sensor. The gap is lightweight, sport-context injury-risk classification from monocular 2D pose with clinical labels.
 
 \section*{Data Processing}
 Two datasets are combined. MPOSE2021 \citep{mazzia2021action,mpose2021zenodo,pic4ser2021mpose} (PoseNet version, $K=17$, shape \texttt{(N,30,17,3)}) skews toward neutral poses; temporal averaging collapses each 30-frame sequence to one 51-dim vector. Leeds Sports Pose Extended \citep{johnson2011lspet} provides 10,000 athlete images (parkour, gymnastics, athletics) covering Classes 1--3. Each LSP image is resized to $192\times192$ and passed through MoveNet SinglePose Lightning \citep{tensorflowmovenet} to extract 17 keypoints in $(y,x,\mathrm{conf})$ format; the channel order is swapped to $(x,y)$, samples with mean confidence below 0.2 are discarded, and each image is flattened to \texttt{(51,)} and concatenated with the MPOSE2021 vectors. Both sources share the 17-joint COCO ordering.
@@ -109,7 +131,7 @@ The system uses two components. The first is MoveNet \citep{tensorflowmovenet}, 
 The baseline is a deterministic REBA-rule classifier with no learned parameters. It computes the same neck, trunk, upper-arm, and knee angles, applies the threshold table, and outputs the highest-risk class. This is a strong baseline because the training labels come from these rules. The MLP should only be considered useful if it improves accuracy and macro-F1 on the held-out test set by handling noisy keypoints, body-size variation, and camera-angle variation better than hard thresholds.
 
 \section*{Ethical Considerations}
-MPOSE2021 contains pose data derived from human videos, so I must confirm that its terms permit academic use. Although raw images are not used, the source datasets may not represent all body types, ages, or ethnicities, so errors may be uneven across users. False negatives could make an athlete overtrust the system; it should be framed as a training aid, not medical advice or a safety guarantee. Any sport or workplace deployment must obtain informed consent because pose tracking can become surveillance.
+MPOSE2021 contains pose data derived from human videos, so its terms must be confirmed to permit academic use. Although raw images are not used, the source datasets may not represent all body types, ages, or ethnicities, so errors may be uneven across users. False negatives could make an athlete overtrust the system; it should be framed as a training aid, not medical advice or a safety guarantee. Any sport or workplace deployment must obtain informed consent because pose tracking can become surveillance.
 
 \newpage
 \begin{thebibliography}{9}
@@ -129,6 +151,11 @@ Bazarevsky, V., Grishchenko, I., Raveendran, K., Zhu, T., Zhang, F., and Grundma
 \newblock BlazePose: On-device real-time body pose tracking.
 \newblock \textit{arXiv preprint arXiv:2006.10204}.
 
+\bibitem[Chatzis et~al.(2022)]{chatzis2022automatic}
+Chatzis, T., Konstantinidis, D., and Dimitropoulos, K. (2022).
+\newblock Automatic ergonomic risk assessment using a variational deep network architecture.
+\newblock \textit{Sensors}, 22(16), 6051.
+
 \bibitem[Fan et~al.(2024)]{fan2024cp3d}
 Fan, C., Mei, Q., and Li, X. (2024).
 \newblock 3D pose estimation dataset and deep learning-based ergonomic risk assessment in construction.
@@ -138,6 +165,12 @@ Fan, C., Mei, Q., and Li, X. (2024).
 Hignett, S. and McAtamney, L. (2000).
 \newblock Rapid entire body assessment (REBA).
 \newblock \textit{Applied Ergonomics}, 31(2), 201--205.
+
+\bibitem[Johnson and Everingham(2011)]{johnson2011lspet}
+Johnson, S. and Everingham, M. (2011).
+\newblock Learning effective human pose estimation from inaccurate annotation.
+\newblock \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, pp.\ 1465--1472.
+\newblock \url{https://sam.johnson.io/research/lspet.html}.
 
 \bibitem[Mazzia et~al.(2021)]{mazzia2021action}
 Mazzia, V., Angarano, S., Salvetti, F., Angelini, F., and Chiaberge, M. (2021).
@@ -163,17 +196,6 @@ Sun, K., Xiao, B., Liu, D., and Wang, J. (2019).
 TensorFlow Hub. (2024).
 \newblock MoveNet: Ultra fast and accurate pose detection model.
 \newblock \url{https://www.tensorflow.org/hub/tutorials/movenet}.
-
-\bibitem[Johnson and Everingham(2011)]{johnson2011lspet}
-Johnson, S. and Everingham, M. (2011).
-\newblock Learning effective human pose estimation from inaccurate annotation.
-\newblock \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, pp.\ 1465--1472.
-\newblock \url{https://sam.johnson.io/research/lspet.html}.
-
-\bibitem[Chatzis et~al.(2022)]{chatzis2022automatic}
-Chatzis, T., Konstantinidis, D., and Dimitropoulos, K. (2022).
-\newblock Automatic ergonomic risk assessment using a variational deep network architecture.
-\newblock \textit{Sensors}, 22(16), 6051.
 
 \end{thebibliography}
 
