@@ -22,7 +22,7 @@
 \vspace{-0.5in}
 
 \section*{Introduction}
-The project is motivated by the student's experience with badminton and bouldering injuries, including shoulder strain from poor smash mechanics and knee misalignment during dynamic bouldering moves. These examples show how many sport injuries are linked to measurable, preventable joint-angle deviations. The goal is to build a system that classifies body poses into injury-risk categories from a single image frame without motion-capture equipment. Deep learning is appropriate because fixed angle thresholds do not generalize across body sizes, camera viewpoints, or noisy keypoint estimates --- an MLP can learn a robust decision boundary from data where hard rules fail. Problem statement: given a 51-dimensional keypoint vector extracted from one image frame, classify the pose into one of four clinically grounded injury-risk classes.
+The project is motivated by the student's experience with badminton and bouldering injuries, including shoulder strain from poor smash mechanics and wrist sprain during dynamic bouldering moves. These examples show how many sport injuries are linked to measurable, preventable joint-angle deviations. The goal is to build a system that classifies body poses into injury-risk categories from a single image frame without motion-capture equipment. Deep learning is appropriate because fixed angle thresholds do not generalize across body sizes, camera viewpoints, or noisy keypoint estimates --- an MLP can learn a robust decision boundary from data where hard rules fail. Problem statement: given a 51-dimensional keypoint vector extracted from one image frame, classify the pose into one of four clinically grounded injury-risk classes.
 
 \section*{Illustration}
 \begin{figure}[!h]
@@ -30,11 +30,12 @@ The project is motivated by the student's experience with badminton and boulderi
 \fbox{\begin{minipage}{0.93\linewidth}
 \centering\small
 \textbf{MPOSE2021 / LSP Extended images} $\rightarrow$
-\textbf{Keypoint extraction (PoseNet / MoveNet)} $\rightarrow$
+\textbf{Keypoint extraction (MoveNet)} $\rightarrow$
 \textbf{51-dim vector: 17 joints $\times$ $(x,y,\mathrm{conf})$} $\rightarrow$
 \textbf{REBA angle labelling} $\rightarrow$
-\textbf{MLP: Linear(51,128), ReLU, Dropout; Linear(128,64), ReLU, Dropout; Linear(64,4), Softmax} $\rightarrow$
-\textbf{0 Neutral; 1 Trunk dev.\,$>30^\circ$; 2 Neck $>15^\circ$; 3 Overreach $>60^\circ$}
+\textbf{MLP(2 to 3layers, final layer outputs 4 categories} $\rightarrow$
+\textbf{0 Neutral; 1 Trunk dev.\,$>30^\circ$; 2 Neck $>15^\circ$; 3 Overreach $>60^\circ$} $\rightarrow$
+\textbf{Evaluate on held-out test set: Accuracy, Macro-F1, Per-class Precision/Recall}
 \end{minipage}}
 \caption{Training and evaluation pipeline. Keypoint vectors from MPOSE2021 (PoseNet, $K=17$) and LSP Extended (MoveNet) are auto-labelled via REBA-derived angle thresholds, then used to train and evaluate the MLP on held-out validation and test splits.}
 \label{fig:pipeline}
@@ -82,7 +83,6 @@ The baseline is a deterministic REBA-rule classifier with no learned parameters.
 MPOSE2021 contains pose data derived from human videos, so I must confirm that its terms permit academic use. Although raw images are not used, the source datasets may not represent all body types, ages, or ethnicities, so errors may be uneven across users. False negatives could make an athlete overtrust the system; it should be framed as a training aid, not medical advice or a safety guarantee. Any sport or workplace deployment must obtain informed consent because pose tracking can become surveillance.
 
 \newpage
-\section*{References}
 \begin{thebibliography}{9}
 
 \bibitem[Anthropic(n.d.a)]{anthropic2026claude}
