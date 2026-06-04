@@ -8,6 +8,8 @@
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage{microtype}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc}
 
 \title{Sport-Informed Injury Risk Classification via Pose Estimation}
 \author{%
@@ -27,17 +29,44 @@ The project is motivated by the student's experience with badminton and boulderi
 \section*{Illustration}
 \begin{figure}[!h]
 \centering
-\fbox{\begin{minipage}{0.93\linewidth}
-\centering\small
-\textbf{MPOSE2021 / LSP Extended images} $\rightarrow$
-\textbf{Keypoint extraction (MoveNet)} $\rightarrow$
-\textbf{51-dim vector: 17 joints $\times$ $(x,y,\mathrm{conf})$} $\rightarrow$
-\textbf{REBA angle labelling} $\rightarrow$
-\textbf{MLP(2 to 3layers, final layer outputs 4 categories} $\rightarrow$
-\textbf{0 Neutral; 1 Trunk dev.\,$>30^\circ$; 2 Neck $>15^\circ$; 3 Overreach $>60^\circ$} $\rightarrow$
-\textbf{Evaluate on held-out test set: Accuracy, Macro-F1, Per-class Precision/Recall}
-\end{minipage}}
-\caption{Training and evaluation pipeline. Keypoint vectors from MPOSE2021 (PoseNet, $K=17$) and LSP Extended (MoveNet) are auto-labelled via REBA-derived angle thresholds, then used to train and evaluate the MLP on held-out validation and test splits.}
+\begin{tikzpicture}[
+  node distance=0.5cm and 0.6cm,
+  box/.style={rectangle, rounded corners=4pt, align=center, font=\small,
+              minimum height=0.9cm, text width=2.0cm, inner sep=5pt},
+  arr/.style={-{Stealth[length=5pt, width=4pt]}, thick}
+]
+%% Row 1: data preparation
+\node[box, draw=blue!70!black,   fill=blue!10]     (mpose)
+  {MPOSE2021\\\scriptsize PoseNet, $K{=}17$};
+\node[box, draw=blue!70!black,   fill=blue!10,     below=0.5cm of mpose] (lsp)
+  {LSP Ext.\\\scriptsize 10k images};
+\node[box, draw=teal!70!black,   fill=teal!10,     right=0.6cm of lsp]  (mn)
+  {MoveNet\\\scriptsize Pose Extractor};
+\node[box, draw=orange!70!black, fill=orange!10,   right=0.6cm of mn]   (vec)
+  {51-dim Vector\\\scriptsize $17{\times}(x,y,c)$};
+\node[box, draw=orange!70!black, fill=orange!10,   right=0.6cm of vec]  (reba)
+  {REBA Labels\\\scriptsize 4 classes};
+%% Row 2: training and evaluation
+\node[box, draw=violet!70!black, fill=violet!10,   below=0.7cm of lsp]  (mlp)
+  {MLP Classifier\\\scriptsize 2--3 layers};
+\node[box, draw=violet!70!black, fill=violet!10,   right=0.6cm of mlp]  (pred)
+  {Risk Class\\\scriptsize 0--3};
+\node[box, draw=green!60!black,  fill=green!10,    right=0.6cm of pred] (eval)
+  {Metrics\\\scriptsize Acc, F1, P/R};
+%% MPOSE → vec directly (right then down into vec top)
+\draw[arr] (mpose.east) -| (vec.north);
+%% LSP → MoveNet → vec
+\draw[arr] (lsp)  -- (mn);
+\draw[arr] (mn)   -- (vec);
+\draw[arr] (vec)  -- (reba);
+%% Connecting arrow: reba → mlp (routes through the row gap)
+\coordinate (bend) at ([yshift=0.3cm]mlp.north);
+\draw[arr] (reba.south) |- (bend) -- (mlp.north);
+%% Row 2 arrows
+\draw[arr] (mlp)  -- (pred);
+\draw[arr] (pred) -- (eval);
+\end{tikzpicture}
+\caption{Training and evaluation pipeline. Images from MPOSE2021 (PoseNet, $K{=}17$, temporal-averaged) and LSP Extended (+MoveNet) are mapped to a 51-dimensional keypoint vector. REBA-derived angle thresholds assign one of four injury-risk labels; the labelled vectors train a fully connected MLP, which is then evaluated on a held-out test set.}
 \label{fig:pipeline}
 \end{figure}
 
