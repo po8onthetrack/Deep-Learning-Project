@@ -21,6 +21,9 @@
 }
 \makeatother
 
+% Slightly tighten inter-paragraph spacing to keep the main text within 2 pages
+\setlength{\parskip}{4.5pt}
+
 % Override geometry: tighter top/bottom margins
 \AtBeginDocument{%
   \newgeometry{%
@@ -33,7 +36,7 @@
   }%
 }
 
-\title{Sport-Informed Injury Risk Classification via Pose Estimation}
+\title{Pose-Based Human Action Recognition for Athletic Movement Analysis}
 \author{%
   Harry Zhang\\
   1010988843, harryh.zhang@mail.utoronto.ca\\
@@ -46,7 +49,7 @@
 \vspace{-0.45in}
 
 \section*{Introduction}
-The project is motivated by the author's experience with badminton and bouldering injuries, including shoulder strain from poor smash mechanics and wrist sprain during dynamic bouldering moves. These examples show how many sport injuries are linked to measurable, preventable joint-angle deviations. The goal is to build a system that classifies a 51-dimensional keypoint vector extracted from one image frame into one of four clinically grounded injury-risk categories, without motion-capture equipment. Deep learning is appropriate because fixed angle thresholds do not generalize across body sizes, camera viewpoints, or noisy keypoint estimates --- an MLP can learn a robust decision boundary from data where hard rules fail.
+This project is motivated by the author's experience with badminton and bouldering, where reading how the body moves --- a smash, a dynamic reach --- is the first step toward better technique and fewer injuries. The goal is to recognise human movement from body pose alone: given a short sequence of 17 body-keypoint positions tracked across video frames from a single camera, classify it into one of the MPOSE2021 action categories, with no motion-capture equipment. Deep learning is appropriate because an action is defined by \emph{how} the joints move over time, a spatio-temporal pattern that cannot be written as a fixed rule over keypoints; a recurrent network must learn both the pose configuration in each frame and its dynamics across frames. Reliable markerless action recognition is a building block for downstream movement analysis, training feedback, and injury-aware coaching.
 
 \section*{Illustration}
 \begin{figure}[!h]
@@ -57,81 +60,57 @@ The project is motivated by the author's experience with badminton and boulderin
               minimum height=0.9cm, text width=2.0cm, inner sep=5pt},
   arr/.style={-{Stealth[length=5pt, width=4pt]}, thick}
 ]
-%% Row 1: data preparation
+%% Pose sequences + real action labels
 \node[box, draw=blue!70!black,   fill=blue!10]     (mpose)
-  {MPOSE2021\\\scriptsize PoseNet, $K{=}17$};
-\node[box, draw=blue!70!black,   fill=blue!10,     below=0.5cm of mpose] (lsp)
-  {LSP Ext.\\\scriptsize 10k images};
-\node[box, draw=teal!70!black,   fill=teal!10,     right=0.6cm of lsp]  (mn)
-  {MoveNet\\\scriptsize Pose Extractor};
-\node[box, draw=orange!70!black, fill=orange!10,   right=0.6cm of mn]   (vec)
-  {51-dim Vector\\\scriptsize $17{\times}(x,y,c)$};
-\node[box, draw=orange!70!black, fill=orange!10,   right=0.6cm of vec]  (reba)
-  {REBA Labels\\\scriptsize 4 classes};
-%% Row 2: training and evaluation
-\node[box, draw=violet!70!black, fill=violet!10,   below=0.7cm of lsp]  (mlp)
-  {MLP Classifier\\\scriptsize 2--3 layers};
-\node[box, draw=violet!70!black, fill=violet!10,   right=0.6cm of mlp]  (pred)
-  {Risk Class\\\scriptsize 0--3};
-\node[box, draw=green!60!black,  fill=green!10,    right=0.6cm of pred] (eval)
-  {Metrics\\\scriptsize Acc, F1, P/R};
-%% MPOSE → vec directly (right then down into vec top)
-\draw[arr] (mpose.east) -| (vec.north);
-%% LSP → MoveNet → vec
-\draw[arr] (lsp)  -- (mn);
-\draw[arr] (mn)   -- (vec);
-\draw[arr] (vec)  -- (reba);
-%% Connecting arrow: reba → mlp (routes through the row gap)
-\coordinate (bend) at ([yshift=0.3cm]mlp.north);
-\draw[arr] (reba.south) |- (bend) -- (mlp.north);
-%% Row 2 arrows
-\draw[arr] (mlp)  -- (pred);
-\draw[arr] (pred) -- (eval);
+  {MPOSE2021\\\scriptsize 30-frame pose seq};
+\node[box, draw=red!70!black,    fill=red!10,      right=0.6cm of mpose] (prep)
+  {Normalize \& clean\\\scriptsize center, scale, mask};
+\node[box, draw=violet!70!black, fill=violet!10,   right=0.6cm of prep] (rnn)
+  {RNN\\\scriptsize over 30 frames};
+\node[box, draw=green!60!black,  fill=green!10,    right=0.6cm of rnn] (eval)
+  {Metrics\\\scriptsize Acc, macro-F1};
+\node[box, draw=violet!70!black, fill=violet!10,   below=0.7cm of prep] (mlp)
+  {MLP baseline\\\scriptsize averaged pose};
+\node[box, draw=orange!70!black, fill=orange!10,   above=0.5cm of eval] (labels)
+  {Action Labels\\\scriptsize 20 classes};
+%% Sequence -> preprocess -> temporal model -> metrics
+\draw[arr] (mpose) -- (prep);
+\draw[arr] (prep)  -- (rnn);
+\draw[arr] (rnn)   -- (eval);
+%% Static baseline branch (averaged pose -> MLP)
+\draw[arr] (prep)  -- (mlp);
+\draw[arr] (mlp.east) -| (eval.south);
+%% Ground-truth action labels
+\draw[arr, dashed] (labels) -- (eval);
 \end{tikzpicture}
-\caption{Training and evaluation pipeline. Images from MPOSE2021 (PoseNet, $K{=}17$, temporal-averaged) and LSP Extended (+MoveNet) are mapped to a 51-dimensional keypoint vector. REBA-derived angle thresholds assign one of four injury-risk labels; the labelled vectors train a fully connected MLP, which is then evaluated on a held-out test set.}
+\caption{Action-recognition pipeline. MPOSE2021 provides 30-frame body-pose sequences (17 keypoints per frame) with human-annotated action labels. Each sequence is normalised (hip-centred, torso-scaled) and cleaned (low-confidence joints masked), then read by an RNN that models the temporal evolution of the pose; a static MLP on the time-averaged pose is the baseline. Both are scored against the ground-truth action labels (dashed). At inference, MoveNet converts raw video frames to keypoints (not shown).}
 \label{fig:pipeline}
 \end{figure}
 
 \section*{Background \& Related Work}
-\textbf{REBA.} \citet{hignett2000reba} introduced a clinical postural scoring tool built from more than 600 postural examples. This project uses its trunk, neck, and upper-limb thresholds to generate biomechanically grounded labels instead of manual labels.
-
 \textbf{BlazePose.} \citet{bazarevsky2020blazepose} showed that lightweight CNN pose estimation can run in real time on-device. This supports the choice of a frozen MoveNet-style backbone for fast keypoint extraction.
 
-\textbf{HRNet.} \citet{sun2019hrnet} maintains high-resolution feature maps for accurate keypoint localization. This project trades some pose-estimation accuracy for speed by using a lighter frozen pose model.
+\textbf{HRNet.} \citet{sun2019hrnet} maintains high-resolution feature maps for accurate keypoint localization. This motivates using an accurate but lightweight frozen pose estimator as the front-end that supplies keypoints to the action model.
 
-\textbf{Deep REBA.} \citet{chatzis2022automatic} estimated REBA scores from RGB-derived 3D skeletons using a variational deep network. This project keeps the skeleton-plus-REBA idea but solves a simpler 2D, four-class problem.
+\textbf{ST-GCN.} \citet{yan2018stgcn} introduced spatial-temporal graph convolutions for skeleton-based action recognition, treating the body as a graph that evolves over time. This is the canonical deep approach to the task this project tackles.
 
-\textbf{ConstructionPose3D.} \citet{fan2024cp3d} introduced a large construction-pose dataset for deep ergonomic assessment. This project extends pose-based risk classification to sports using consumer-camera data and no depth sensor. The gap is lightweight, sport-context injury-risk classification from monocular 2D pose with clinical labels.
+\textbf{Hierarchical RNN.} \citet{du2015hierarchical} showed that a recurrent neural network can recognise actions directly from sequences of skeleton joints, establishing the recurrent temporal approach this project builds on. It directly motivates the RNN at the core of our model.
+
+\textbf{Action Transformer.} \citet{mazzia2021action} proposed a self-attention model for short-time pose-based action recognition and released MPOSE2021. This project uses the same dataset but starts from a simpler RNN as a strong, reproducible baseline.
 
 \section*{Data Processing}
-Two datasets are combined. MPOSE2021 \citep{mazzia2021action,mpose2021zenodo,pic4ser2021mpose} (PoseNet version, $K=17$, shape \texttt{(N,30,17,3)}) skews toward neutral poses; temporal averaging collapses each 30-frame sequence to one 51-dim vector. Leeds Sports Pose Extended \citep{johnson2011lspet} provides 10,000 athlete images (parkour, gymnastics, athletics) covering Classes 1--3. Each LSP image is resized to $192\times192$ and passed through MoveNet SinglePose Lightning \citep{tensorflowmovenet} to extract 17 keypoints in $(y,x,\mathrm{conf})$ format; the channel order is swapped to $(x,y)$, samples with mean confidence below 0.2 are discarded, and each image is flattened to \texttt{(51,)} and concatenated with the MPOSE2021 vectors. Both sources share the 17-joint COCO ordering.
+The dataset is MPOSE2021 \citep{mazzia2021action,mpose2021zenodo,pic4ser2021mpose}, built for short-time pose-based action recognition: each sample is a 30-frame clip of 17 COCO body keypoints, shape \texttt{(30,17,3)} as $(x,y,\mathrm{conf})$, with a human-annotated action label across roughly 20 classes (e.g.\ walking, running, jumping, bending, boxing, hand-waving). Because the keypoints are pre-extracted by PoseNet, no pose estimation or hand-labelling is needed; the processing effort instead goes into making the raw keypoints model-ready through three steps: normalisation, cleaning, and a leakage-aware split.
 
-REBA labels are only valid for quasi-static postures, so high-motion MPOSE2021 sequences are removed via mean frame-to-frame displacement \citep{mazzia2021action}: $s = \frac{1}{TJ}\sum_{t}\sum_{j}\|\mathbf{p}_{t+1,j}-\mathbf{p}_{t,j}\|_1$, retaining $\approx$6,000--8,000 samples. All original labels are replaced by REBA-derived angles $\theta = \arccos({\vec{BA}\cdot\vec{BC}}/{\|\vec{BA}\|\|\vec{BC}\|})$ across three triplets: neck (ear$\to$shoulder$\to$hip), trunk ($180^\circ$ minus shoulder$\to$hip$\to$knee), and overreach (hip$\to$shoulder$\to$elbow). Worst violation wins:
-
-\begin{center}
-\small
-\begin{tabular}{lll}
-\toprule
-Class & Label & Condition \\
-\midrule
-0 & Neutral       & all joints within range \\
-1 & Trunk flexion & trunk deviation $>30^\circ$ \\
-2 & Neck strain   & neck angle $>15^\circ$ \\
-3 & Overreach     & overreach angle $>60^\circ$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Thresholds are set at intermediate values relative to strict clinical REBA limits \citep{hignett2000reba} to ensure sufficient class representation. Low-confidence keypoints (conf\,$<0.2$) are excluded; each skeleton is centred at the hip and scaled by torso length. The combined dataset is split 70\,/\,15\,/\,15\% (train\,/\,validation\,/\,test) using stratified sampling; the test set is evaluated exactly once after all tuning is complete. Weighted cross-entropy with inverse class-frequency weights addresses class imbalance.
+First, each frame is \emph{normalised} independently by centring the skeleton at the mid-hip --- the midpoint of the left and right hip keypoints --- and scaling by the torso length, taken as the mid-hip-to-mid-shoulder distance, so the input is invariant to body size, camera distance, and where in the frame the person stands, and the model sees pose geometry rather than raw image coordinates. Second, the keypoints are \emph{cleaned}: joints with confidence below 0.2 --- typically occluded or poorly detected --- have their $(x,y)$ position and confidence zeroed together, so the retained confidence channel doubles as a per-joint reliability flag and a failed detection is signalled to the network rather than entering it as a real joint position. Third, the clips are \emph{split} 70\,/\,15\,/\,15\% (train\,/\,validation\,/\,test) by stratified sampling on the action label to preserve class proportions, with the split kept subject-independent so that no actor seen in training reappears at validation or test time; the held-out test set is evaluated only once.
 
 \section*{Architecture}
-The system uses two components. The first is MoveNet \citep{tensorflowmovenet}, a pretrained CNN that takes a raw image and extracts 17 body keypoints, each represented as a normalized $(x,y,\mathrm{conf})$ triplet, producing a 51-dimensional vector. MoveNet's weights are fixed and not updated during training --- it serves purely as a feature extractor. The second component is a fully connected MLP that takes the 51-dim keypoint vector as input and outputs a probability distribution over the four injury-risk classes. The MLP will consist of several hidden layers with non-linear activations and dropout for regularization, trained with weighted cross-entropy loss and early stopping.
+The deployed system has two parts. MoveNet \citep{tensorflowmovenet}, a frozen pretrained CNN, supplies the 17 keypoints per frame at inference time (image $\to$ keypoints) and is never trained. The trained model is a recurrent neural network (RNN): each of the 30 frames contributes the normalised 51-dim pose vector ($17\times3$) from data processing, and the RNN reads the frames in temporal order, passing its final hidden state to a fully connected layer that outputs a probability distribution over the action classes. An RNN is chosen because an action is characterised by how the pose changes over time; dropout and early stopping are used for regularisation, and weighted cross-entropy handles class imbalance.
 
 \section*{Baseline Model}
-The baseline is a deterministic REBA-rule classifier with no learned parameters. It computes the same neck, trunk, upper-arm, and knee angles, applies the threshold table, and outputs the highest-risk class. This is a strong baseline because the training labels come from these rules. The MLP should only be considered useful if it improves accuracy and macro-F1 on the held-out test set by handling noisy keypoints, body-size variation, and camera-angle variation better than hard thresholds.
+The baseline is a static classifier that discards temporal information: the 30 frames are averaged into a single 51-dim pose vector and classified by a small MLP --- the same keypoint input, but with no sequence modelling. Comparing the RNN against this baseline isolates the value of temporal dynamics: if modelling how the pose evolves does not beat a single averaged pose, the added complexity is not justified. A majority-class predictor gives a trivial lower bound for additional context.
 
 \section*{Ethical Considerations}
-MPOSE2021 contains pose data derived from human videos, so its terms must be confirmed to permit academic use. Although raw images are not used, the source datasets may not represent all body types, ages, or ethnicities, so errors may be uneven across users. False negatives could make an athlete overtrust the system; it should be framed as a training aid, not medical advice or a safety guarantee. Any sport or workplace deployment must obtain informed consent because pose tracking can become surveillance.
+MPOSE2021 contains pose data derived from human videos, so its licensing terms must be confirmed to permit academic use. The source clips may not represent all body types, ages, or ethnicities, so accuracy may be uneven across users. Because a predicted action label can drive downstream training feedback, a misclassification could mislead an athlete, so the system should be framed as a movement-analysis aid rather than an authoritative judgement of performance. Pose-based action recognition can also become surveillance, so any deployment that tracks real people must obtain informed consent.
 
 \newpage
 \begin{thebibliography}{9}
@@ -151,26 +130,10 @@ Bazarevsky, V., Grishchenko, I., Raveendran, K., Zhu, T., Zhang, F., and Grundma
 \newblock BlazePose: On-device real-time body pose tracking.
 \newblock \textit{arXiv preprint arXiv:2006.10204}.
 
-\bibitem[Chatzis et~al.(2022)]{chatzis2022automatic}
-Chatzis, T., Konstantinidis, D., and Dimitropoulos, K. (2022).
-\newblock Automatic ergonomic risk assessment using a variational deep network architecture.
-\newblock \textit{Sensors}, 22(16), 6051.
-
-\bibitem[Fan et~al.(2024)]{fan2024cp3d}
-Fan, C., Mei, Q., and Li, X. (2024).
-\newblock 3D pose estimation dataset and deep learning-based ergonomic risk assessment in construction.
-\newblock \textit{Automation in Construction}, 164, 105452.
-
-\bibitem[Hignett and McAtamney(2000)]{hignett2000reba}
-Hignett, S. and McAtamney, L. (2000).
-\newblock Rapid entire body assessment (REBA).
-\newblock \textit{Applied Ergonomics}, 31(2), 201--205.
-
-\bibitem[Johnson and Everingham(2011)]{johnson2011lspet}
-Johnson, S. and Everingham, M. (2011).
-\newblock Learning effective human pose estimation from inaccurate annotation.
-\newblock \textit{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, pp.\ 1465--1472.
-\newblock \url{https://sam.johnson.io/research/lspet.html}.
+\bibitem[Du et~al.(2015)]{du2015hierarchical}
+Du, Y., Wang, W., and Wang, L. (2015).
+\newblock Hierarchical recurrent neural network for skeleton based action recognition.
+\newblock \textit{CVPR}, 1110--1118.
 
 \bibitem[Mazzia et~al.(2021)]{mazzia2021action}
 Mazzia, V., Angarano, S., Salvetti, F., Angelini, F., and Chiaberge, M. (2021).
@@ -191,11 +154,15 @@ PIC4SeR. (2021).
 Sun, K., Xiao, B., Liu, D., and Wang, J. (2019).
 \newblock Deep high-resolution representation learning for human pose estimation.
 \newblock \textit{CVPR}, 5693--5703.
-
 \bibitem[TensorFlow Hub(2024)]{tensorflowmovenet}
 TensorFlow Hub. (2024).
 \newblock MoveNet: Ultra fast and accurate pose detection model.
 \newblock \url{https://www.tensorflow.org/hub/tutorials/movenet}.
+
+\bibitem[Yan et~al.(2018)]{yan2018stgcn}
+Yan, S., Xiong, Y., and Lin, D. (2018).
+\newblock Spatial temporal graph convolutional networks for skeleton-based action recognition.
+\newblock \textit{AAAI Conference on Artificial Intelligence}, 7444--7452.
 
 \end{thebibliography}
 
