@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Datasets — ignore contents, keep the folder placeholder
+data/MPOSE2021/*
+!data/MPOSE2021/.gitkeep
+
+# Model checkpoints — ignore weights, keep the folder placeholder
+checkpoints/*
+!checkpoints/.gitkeep
