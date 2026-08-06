@@ -7,9 +7,14 @@ __pycache__/
 .ipynb_checkpoints/
 
 
-# Model checkpoints — track final .pt weights, keep the folder placeholder
+# Model checkpoints — track trained weights under model-weights/
 checkpoints/*
 !checkpoints/.gitkeep
-!checkpoints/*.pt
+!checkpoints/model-weights/
 
-guidelines/*
+# Reports — track LaTeX sources and figures, but not build output or course handouts
+guidelines/*.pdf
+guidelines/*.aux
+guidelines/*.log
+guidelines/*.out
+guidelines/*.synctex.gz

@@ -113,48 +113,104 @@ complexity is not justified.
 (lr `1e-3`), dropout, and early stopping on validation macro-F1. For reproducibility:
 seed 66, batch size 64 (train) / 256 (eval), 100-epoch cap, patience 15.
 
-## Results (validation)
+## Results
 
-| Model | Accuracy | Macro-F1 |
-|---|---|---|
-| Majority-class (lower bound) | 0.15 | 0.01 |
-| Averaged-pose MLP (baseline) | 0.63 | 0.56 |
-| **RNN — 2-layer LSTM (primary)** | **0.87** | **0.82** |
+Model selection used the validation set only. The official cross-subject **test split** was
+held out untouched for the whole project and scored exactly once, after all tuning concluded.
+
+| Model | Val acc | Val macro-F1 | Test acc | Test macro-F1 |
+|---|---|---|---|---|
+| Majority-class (lower bound) | 0.15 | 0.01 | — | — |
+| Averaged-pose MLP (baseline) | 0.63 | 0.56 | — | — |
+| **RNN — 2-layer LSTM (primary)** | **0.87** | **0.82** | **0.82** | **0.75** |
 
 The temporal RNN adds **+0.26 macro-F1** over the averaged-pose baseline, confirming the
 central hypothesis: modelling *how* the pose evolves is worth the added complexity.
 Qualitatively, the RNN resolves precisely the motion-dependent confusions that dominated the
 baseline — e.g. the temporal-reverse pair **get-up / sit-down** drops from 0.64 → 0.21, and
-the speed pair **run / jog** from 0.41 → 0.11.
+the speed pair **run / jog** from 0.41 → 0.11. The drop from validation to test reflects
+subject-independence: validation subjects overlap training, test subjects do not.
 
-**Tuning log** (one change at a time from the 1-layer champion):
+**Tuning log** — one change at a time against the incumbent, adopted only if the gain exceeded
+the measured ±0.02 run-to-run noise:
 
 | # | Config (change vs. champion) | Val acc | Val macro-F1 | Stop ep. | Verdict |
 |---|---|---|---|---|---|
 | 0 | 1-layer LSTM, h=128, drop 0.3 (base) | 0.840 | 0.773 | 79 | champion → beaten |
 | 1 | `num_layers=2` (+ inter-layer dropout) | 0.871 | **0.819** | 82 | **champion** (+0.046) |
-| 2 | + `weight_decay=1e-4` (on 2-layer) | 0.858 | 0.808 | 93 | not adopted (−0.011, within noise) |
-| 3 | `hidden=256` (on 2-layer) | 0.858 | 0.804 | 54 | not adopted (−0.015, within noise) |
+| 2 | + `weight_decay=1e-4` | 0.858 | 0.808 | 93 | not adopted (−0.011, within noise) |
+| 3 | `hidden=256` | 0.858 | 0.804 | 54 | not adopted (−0.015, within noise) |
+| 4 | `bidirectional=True` | 0.870 | 0.823 | 82 | not adopted (+0.004, within noise) |
+| 5 | mean+max pool readout | 0.872 | 0.826 | 82 | not adopted (+0.007, within noise) |
+| 6 | velocity features (`in_dim=102`) | 0.858 | 0.805 | 64 | not adopted (−0.014, within noise) |
+| 7 | mean+max pool + velocity | — | 0.844 / 0.816 / 0.820 (seeds 66/67/123) | — | not adopted (mean 0.827 ± 0.015) |
+| 8 | augmentation: flip + jitter | 0.845 | 0.785 | 63 | not adopted (−0.034, over-regularised) |
 
-## New-Data Test Plan
+Rows 2–7 all fall inside the noise band; row 7's promising single run (0.844) **did not survive
+reseeding**, and row 8 degraded accuracy by over-regularising. Seven variants across
+architecture, readout, and input features therefore failed to beat the 2-layer LSTM — evidence
+that model capacity is not the primary bottleneck.
 
-For final testing on truly unseen data: record ≈5 takes each of ≈10–12 feasible actions
-(≈50–60 short clips; static camera, full body in frame, position and speed varied), extract
-keypoints with frozen MoveNet, apply the identical preprocessing pipeline, and evaluate the
-trained model **exactly once** — these clips are never used for training or tuning. The same
-setup doubles as a real-time demo.
+## New-Data Evaluation (self-recorded)
+
+To test generalisation beyond the dataset, **82 clips** covering **18 of the 20 actions** were
+recorded with a MacBook webcam across **four locations** (different backgrounds and lighting)
+and **three people** of differing body proportions, with position and speed varied between
+takes. `jog` and `pick-up` were excluded: MPOSE ships skeletons rather than source video, so
+their intended execution could not be inferred, and misjudged recordings would be meaningless
+test cases. Keypoints were extracted with frozen **MoveNet Thunder** on a centre square crop,
+sampled as a centred 30-frame window at ≈30 fps to match MPOSE's temporal resolution, then run
+through the *identical* preprocessing. The clips never influenced training or tuning, and the
+model was scored on them exactly once.
+
+| Model | Accuracy | Macro-F1 |
+|---|---|---|
+| Averaged-pose MLP (baseline) | 0.21 | 0.15 |
+| **2-layer LSTM (primary)** | **0.43** | **0.36** |
+| LSTM + flip/jitter augmentation | 0.35 | 0.33 |
+
+Accuracy falls from 0.82 (test split) to 0.43 — a substantial but **structured** drop, and the
+structure is the interesting part:
+
+- **Large posture changes transfer**: `sit-down`, `bend`, `cross-arms` 5/5; `get-up`, `walk`,
+  `run` 3/5.
+- **Low-motion and fine-gesture classes collapse**: `standing`, `check-watch` 0/5;
+  `hands-clap`, `box`, `kick` 1/5.
+- **Two confounded causes.** A *performance-style gap* (the model learned MPOSE actors'
+  renditions, and with no source video to imitate the recordings only approximate that style)
+  and an *input-quality gap* (webcam keypoints average ≈0.61 confidence vs ≈0.81 in training,
+  with some joints missing entirely and wrists least reliable). Re-extracting the same clips
+  with PoseNet would separate the two.
+- **A surprising negative result**: the augmentation-trained variant was expected to transfer
+  *better* — the clips contain exactly what its training noise simulated — yet it scored
+  *lower* (0.35 vs 0.43). Flip-and-jitter noise does not reproduce the real shift's structure.
+- The **temporal advantage persists** under domain shift: the LSTM more than doubles the MLP
+  baseline (0.43 vs 0.21).
 
 ## Repository Structure
 
 ```
 .
-├── project.ipynb        # main notebook: loading, preprocessing, models, training, eval
-├── checkpoints/         # trained weights (.pt)
-│   ├── mlp_baseline.pt
-│   └── pose_net_baseline.pt
-├── data/                # placeholder — dataset loaded via the `mpose` package, not tracked
+├── project.ipynb                  # main notebook: loading → preprocessing → models → tuning → evaluation
+├── checkpoints/
+│   └── model-weights/             # trained weights for every logged experiment
+│       ├── rnn_2layer.pt          #   ★ final model — 2-layer LSTM
+│       ├── mlp_baseline.pt        #     averaged-pose MLP baseline
+│       ├── pose_net_baseline.pt   #     1-layer LSTM (tuning row 0)
+│       └── rnn_{wd,hid,bidirectional,meanmax,velocity_meaxmean,aug}.pt   # tuning rows 2–8
+├── guidelines/                    # LaTeX sources for the written deliverables
+│   ├── project_proposal.tex
+│   ├── progress_report.tex
+│   ├── final_report.tex
+│   ├── aps360.sty                 # course LaTeX style file
+│   └── image/                     # figures used in the reports
+├── data/                          # placeholder — MPOSE2021 loads via the `mpose` package, not tracked
+├── .gitignore
 └── README.md
 ```
+
+Report PDFs and course handouts are not tracked; the `.tex` sources compile against
+`aps360.sty` and the figures in `guidelines/image/`.
 
 ## Setup & Usage
 
